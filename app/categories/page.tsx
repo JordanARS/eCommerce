@@ -1,47 +1,72 @@
-
 import Link from 'next/link';
 import { categories } from '@/lib/data';
 
 export default function CategoriesPage() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-8 bg-gray-100 dark:bg-zinc-900">
-      <h1 className="text-3xl font-bold mb-8 text-black dark:text-white">Categorías de Productos</h1>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl w-full">
-        {categories.map((category) => (
-          <Link 
-            key={category.id} 
-            href={`/categories/${category.slug}`}
-            className="block group"
-          >
-            <div className="bg-white dark:bg-zinc-800 rounded-lg shadow-md overflow-hidden transition-transform transform hover:scale-105 border border-gray-200 dark:border-zinc-700">
-              <div className="h-48 w-full bg-gray-200 dark:bg-zinc-700 relative">
-                 <img 
-                   src={category.image} 
-                   alt={category.name} 
-                   className="w-full h-full object-cover"
-                 />
-              </div>
-              <div className="p-4">
-                <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400">
-                  {category.name}
-                </h2>
-                <p className="text-gray-600 dark:text-gray-400 text-sm">
-                  {category.description}
-                </p>
-                <div className="mt-4 text-blue-500 dark:text-blue-400 font-medium text-sm text-right">
-                  Ver Productos &rarr;
+    <div className="min-h-screen bg-gradient-to-br dark:from-zinc-900 dark:to-black font-sans">
+      {/* Hero Section */}
+      <div className="relative bg-[#EEEEEE] text-black py-16 px-4 sm:px-6 lg:px-8 overflow-hidden">
+        <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] mix-blend-overlay"></div>
+        <div className="relative max-w-7xl mx-auto text-center z-10">
+          <h1 className="text-4xl md:text-5xl text-[#59AB9B] font-extrabold tracking-tight mb-4 drop-shadow-md">
+            Nuestros Servicios
+          </h1>
+          <p className="max-w-2xl mx-auto text-xl text-black drop-shadow-sm">
+            Encuentre el homenaje perfecto. Explore nuestras categorías diseñadas para brindar tranquilidad y respeto.
+          </p>
+        </div>
+      </div>
+
+      {/* Categories Grid */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 -mt-10 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {categories.map((category) => (
+            <Link 
+              key={category.id} 
+              href={`/categories/${category.slug}`}
+              className="group relative block h-[28rem]"
+            >
+              <div className="h-full w-full bg-white dark:bg-zinc-800 rounded-2xl shadow-xl overflow-hidden transform transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl flex flex-col border border-gray-100 dark:border-zinc-700">
+                
+                {/* Image Section */}
+                <div className="relative h-3/5 overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-60 group-hover:opacity-40 transition-opacity z-10" />
+                   {/* eslint-disable-next-line @next/next/no-img-element */}
+                   <img 
+                     src={category.image} 
+                     alt={category.name} 
+                     className="w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-110"
+                   />
+                </div>
+
+                {/* Content Section */}
+                <div className="flex flex-col justify-between flex-grow relative z-20 bg-white dark:bg-zinc-800">
+                  <div className="p-6 flex items-center justify-center flex-grow">
+                    <h2 className="text-2xl text-center font-bold text-[#59AB9B] dark:text-white group-hover:text-[#F6AA28] dark:group-hover:text-blue-400 transition-colors">
+                      {category.name}
+                    </h2>
+                  </div>
+                  
+                  <div className="w-full bg-[#59AB9B] py-3 text-center text-white font-bold tracking-wider text-md group-hover:bg-[#F6AA28] transition-colors">
+                    SELECCIONAR OPCIONES
+                  </div>
                 </div>
               </div>
-            </div>
+            </Link>
+          ))}
+        </div>
+
+        <div className="mt-16 text-center">
+          <Link
+            href="/"
+            className="inline-flex items-center text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Volver al Inicio
           </Link>
-        ))}
-      </div>
-      
-      <div className="mt-12">
-        <Link href="/" className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white underline">
-          &larr; Volver al Inicio
-        </Link>
+        </div>
       </div>
     </div>
   );
