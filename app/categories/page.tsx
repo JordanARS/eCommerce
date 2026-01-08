@@ -1,7 +1,12 @@
 import Link from 'next/link';
-import { categories } from '@/lib/data';
+import { categories, products } from '@/lib/data';
 
 export default function CategoriesPage() {
+  const getProductCount = (categoryId: string) => {
+    const count = products.filter(p => p.categoryId === categoryId).length;
+    return count === 1 ? '1 PRODUCTO' : `${count} PRODUCTOS`;
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br dark:from-zinc-900 dark:to-black font-sans">
       {/* Hero Section */}
@@ -16,7 +21,6 @@ export default function CategoriesPage() {
           </p>
         </div>
       </div>
-
       {/* Categories Grid */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 -mt-10 mb-12">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -38,17 +42,16 @@ export default function CategoriesPage() {
                      className="w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-110"
                    />
                 </div>
-
                 {/* Content Section */}
                 <div className="flex flex-col justify-between flex-grow relative z-20 bg-white dark:bg-zinc-800">
                   <div className="p-6 flex items-center justify-center flex-grow">
-                    <h2 className="text-2xl text-center font-bold text-[#59AB9B] dark:text-white group-hover:text-[#F6AA28] dark:group-hover:text-blue-400 transition-colors">
+                    <h2 className="text-2xl text-center font-bold text-[#59AB9B] dark:text-white group-hover:text-[#F6AA28] dark:group-hover:text-blue-400 transition-colors drop-shadow-md">
                       {category.name}
                     </h2>
                   </div>
                   
                   <div className="w-full bg-[#59AB9B] py-3 text-center text-white font-bold tracking-wider text-md group-hover:bg-[#F6AA28] transition-colors">
-                    SELECCIONAR OPCIONES
+                    {getProductCount(category.id)}
                   </div>
                 </div>
               </div>

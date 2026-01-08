@@ -19,8 +19,8 @@ export default async function CategoryProductsPage(props: {
   return (
     <div className="flex flex-col items-center min-h-screen p-8 bg-gray-50 dark:bg-zinc-900">
       <div className="max-w-6xl w-full">
-        <Link href="/categories" className="text-blue-500 hover:underline mb-8 inline-block dark:text-blue-400">
-          &larr; Volver a Categorías
+        <Link href="/categories" className="text-blue-500 mb-8 inline-block dark:text-blue-400">
+          Volver a Categorías
         </Link>
         
         <header className="mb-10 text-center">
@@ -42,12 +42,23 @@ export default async function CategoryProductsPage(props: {
                             ${product.price}
                         </span>
                     </div>
-                    <p className="text-gray-600 dark:text-gray-400 mb-4 h-12 overflow-hidden">
+                    <p className="text-gray-600 dark:text-gray-400 mb-4 h-12 overflow-hidden"> 
                         {product.description}
                     </p>
-                    <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors">
-                        Agregar al Carrito
-                    </button>
+                    <div className="mt-auto">
+                        {product.hasOptions ? (
+                             <Link 
+                                href={`/categories/${category.slug}/${product.id}`}
+                                className="w-full bg-[#59AB9B] hover:bg-[#F6AA28] text-white font-bold py-2 px-4 rounded transition-colors block text-center uppercase"
+                            >
+                                Seleccionar Opciones
+                            </Link>
+                        ) : (
+                            <button className="w-full bg-[#59AB9B] hover:bg-[#F6AA28] text-white font-bold py-2 px-4 rounded transition-colors cursor-pointer uppercase">
+                                Agregar al Carrito
+                            </button>
+                        )}
+                    </div>
                  </div>
               </div>
             ))
