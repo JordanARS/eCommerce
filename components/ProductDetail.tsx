@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useState } from 'react';
-import { Category, Product, ProductOption } from '@/lib/data';
+import { Category, Product } from '@/lib/api';
 import MetodosPago from './metodosPago';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import Link from 'next/link';
@@ -12,30 +12,41 @@ interface ProductDetailProps {
   category: Category;
 }
 
+type ProductOption = NonNullable<Product['options']>[number];
+
 export default function ProductDetail({ product, category }: ProductDetailProps) {
-  const [selectedImage, setSelectedImage] = useState(product.image || product.images?.[0] || '');
+  const [selectedImage, setSelectedImage] = useState(
+    product.imagenPrincipal || (product.images && product.images.length > 0 ? product.images[0].imageUrl : '/placeholder.svg')
+  );
   const [selectedOption, setSelectedOption] = useState<ProductOption | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<'description' | 'additional'>('description');
 
-  const images = product.images && product.images.length > 0 ? product.images : [product.image!];
+  // Map backend images to string array for gallery
+  const galleryImages = product.images && product.images.length > 0 
+    ? product.images.map(img => img.imageUrl) 
+    : [product.imagenPrincipal];
   
   // Calculate price range
-  const minPrice = product.options && product.options.length > 0
-    ? Math.min(...product.options.map(o => o.price || 0))
-    : product.price;
-  const maxPrice = product.options && product.options.length > 0
-    ? Math.max(...product.options.map(o => o.price || 0))
-    : product.price;
+  const hasOptions = product.options && product.options.length > 0;
 
-  const currentPrice = selectedOption ? selectedOption.price : minPrice;
+  const minPrice = hasOptions
+    ? Math.min(...product.options!.map(o => o.precio || 0))
+    : product.precioBase;
+  const maxPrice = hasOptions
+    ? Math.max(...product.options!.map(o => o.precio || 0))
+    : product.precioBase;
+
+  const currentPrice = selectedOption 
+    ? selectedOption.precio
+    : minPrice;
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(price);
   };
 
   const handleOptionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const optId = e.target.value;
+    const optId = Number(e.target.value);
     if (!optId) {
       setSelectedOption(null);
       return;
@@ -51,9 +62,9 @@ export default function ProductDetail({ product, category }: ProductDetailProps)
          <nav className="text-sm mb-8 text-gray-500">
            <Link href="/" className="hover:text-[#59AB9B]">Inicio</Link> 
            <span className="mx-2">/</span>
-           <Link href={`/categories/${category.slug}`} className="hover:text-[#59AB9B] uppercase">{category.name}</Link>
+           <Link href={`/categories/${category.slug}`} className="hover:text-[#59AB9B] uppercase">{category.nombre}</Link>
            <span className="mx-2">/</span>
-           <span className="text-gray-800 font-semibold">{product.name}</span>
+           <span className="text-gray-800 font-semibold">{product.nombre}</span>
          </nav>
 
          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-16">
@@ -61,10 +72,10 @@ export default function ProductDetail({ product, category }: ProductDetailProps)
             <div className="space-y-4">
                <div className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-300">
                   <Image
-                    width={400}
-                    height={400} 
+                    width={600}
+                    height={600} 
                     src={selectedImage} 
-                    alt={product.name} 
+                    alt={product.nombre} 
                     className="w-full h-full object-cover"
                   />
                   <div className="absolute top-4 right-4 bg-white p-2 rounded-full shadow-md cursor-pointer hover:scale-110 transition-transform">
@@ -73,14 +84,14 @@ export default function ProductDetail({ product, category }: ProductDetailProps)
                </div>
                
                <div className="grid grid-cols-4 gap-4">
-                  {images.map((img, idx) => (
+                  {galleryImages.map((img, idx) => (
                     <div 
                       key={idx} 
                       className={`aspect-square rounded-md overflow-hidden cursor-pointer border-2 transition-colors ${selectedImage === img ? 'border-[#59AB9B]' : 'border-transparent hover:border-gray-300'}`}
                       onClick={() => setSelectedImage(img)}
                     >
                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                       <Image src={img} alt={`Vista ${idx + 1}`} width={400} height={400} className="w-full h-full object-cover" />
+                       <Image src={img} alt={`Vista ${idx + 1}`} width={150} height={150} className="w-full h-full object-cover" />
                     </div>
                   ))}
                </div>
@@ -88,22 +99,22 @@ export default function ProductDetail({ product, category }: ProductDetailProps)
 
             {/* Right Column: Info */}
             <div>
-               <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">{category.name}</p>
-               <h1 className="text-4xl font-bold text-[#59AB9B] mb-4">{product.name}</h1>
+               <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">{category.nombre}</p>
+               <h1 className="text-4xl font-bold text-[#59AB9B] mb-4">{product.nombre}</h1>
                
                <div className="text-2xl font-bold text-gray-800 mb-4">
-                  {product.options && product.options.length > 0 && !selectedOption 
+                  {hasOptions && !selectedOption 
                     ? `${formatPrice(minPrice!)} – ${formatPrice(maxPrice!)}` 
                     : formatPrice(currentPrice!)
                   }
                </div>
 
                <p className="text-gray-600 mb-6 leading-relaxed">
-                 {product.description}
+                 {product.descripcionPrincipal}
                </p>
 
                {/* Options Selector */}
-               {product.hasOptions && product.options && (
+               {hasOptions && product.options && (
                  <div className="mb-8 p-6 bg-gray-50 rounded-xl border border-gray-100">
                     <div className="mb-4">
                        <label htmlFor="options" className="block text-sm font-bold text-gray-700 mb-2">
@@ -119,7 +130,7 @@ export default function ProductDetail({ product, category }: ProductDetailProps)
                             <option value="">Selecciona una opción</option>
                             {product.options.map(opt => (
                               <option key={opt.id} value={opt.id}>
-                                {opt.name}
+                                {opt.nombre}
                               </option>
                             ))}
                          </select>
@@ -128,7 +139,7 @@ export default function ProductDetail({ product, category }: ProductDetailProps)
                     
                     {selectedOption && (
                        <div className="text-3xl font-bold text-gray-800 mb-2 animate-fade-in">
-                          {formatPrice(selectedOption.price!)}
+                          {formatPrice(currentPrice!)}
                        </div>
                     )}
 
@@ -141,7 +152,7 @@ export default function ProductDetail({ product, category }: ProductDetailProps)
                        {/* Quantity */}
                        <div className="flex items-center border border-gray-300 rounded-md bg-white">
                           <button 
-                            className="px-4 py-2 text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                            className="px-4 py-2 text-gray-600 hover:bg-gray-100 disabled:opacity-50 cursor-pointer"
                             onClick={() => setQuantity(Math.max(1, quantity - 1))}
                             disabled={quantity <= 1}
                           >
@@ -154,17 +165,17 @@ export default function ProductDetail({ product, category }: ProductDetailProps)
                             readOnly 
                           />
                           <button 
-                            className="px-4 py-2 text-gray-600 hover:bg-gray-100"
-                            onClick={() => setQuantity(quantity + 1)}
+                            className="px-4 py-2 text-gray-600 hover:bg-gray-100 cursor-pointer"
+                            onClick={() => setQuantity(quantity + 1 )}
                           >
                             +
                           </button>
                        </div>
 
-                       {/* Add to Cart Button */}
+                       {/* Add Cart*/}
                        <button 
-                         className={`flex-grow bg-[#59AB9B] text-white font-bold py-3 px-8 rounded-md shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 active:translate-y-0 uppercase tracking-wider ${!selectedOption && product.hasOptions ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#4a9688]'}`}
-                         disabled={product.hasOptions && !selectedOption}
+                         className={`flex-grow bg-[#59AB9B] text-white font-bold py-3 px-8 rounded-md shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 active:translate-y-0 uppercase tracking-wider ${!selectedOption && hasOptions ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#4a9688]'}`}
+                         disabled={hasOptions && !selectedOption}
                        >
                          Añadir al Carrito
                        </button>
@@ -174,9 +185,8 @@ export default function ProductDetail({ product, category }: ProductDetailProps)
 
                <div className="text-sm text-gray-500 space-y-1 mb-8">
                   <p>SKU: <span className="text-gray-700">{product.sku || 'N/D'}</span></p>
-                  <p>Categoría: <Link href={`/categories/${category.slug}`} className="text-[#59AB9B] hover:underline">{category.name}</Link></p>
+                  <p>Categoría: <Link href={`/categories/${category.slug}`} className="text-[#59AB9B] hover:underline">{category.nombre}</Link></p>
                </div>
-
                {/* Payment Logos Placeholder */}
                <MetodosPago />
             </div>
@@ -202,7 +212,7 @@ export default function ProductDetail({ product, category }: ProductDetailProps)
             <div className="text-gray-600 leading-relaxed max-w-4xl">
                {activeTab === 'description' && (
                  <div className="animate-fade-in">
-                    <p>{product.longDescription || product.description}</p>
+                    <p>{product.descripcionLarga || product.descripcionPrincipal}</p>
                  </div>
                )}
                {activeTab === 'additional' && (
@@ -217,7 +227,7 @@ export default function ProductDetail({ product, category }: ProductDetailProps)
                              <th className="py-2 text-gray-800 font-medium">Dimensiones</th>
                              <td className="py-2">N/D</td>
                           </tr>
-                          {product.hasOptions && (
+                          {hasOptions && (
                              <tr className="border-b border-gray-100">
                                 <th className="py-2 text-gray-800 font-medium">Variantes</th>
                                 <td className="py-2">{product.options?.length} opciones disponibles</td>

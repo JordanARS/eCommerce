@@ -1,11 +1,52 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { categories, products } from '@/lib/data';
+import { categoryService, productService, Category, Product } from '@/lib/api';
 
 export default function CategoriesPage() {
-  const getProductCount = (categoryId: string) => {
-    const count = products.filter(p => p.categoryId === categoryId).length;
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryCounts, setCategoryCounts] = useState<Record<number, number>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const cats = await categoryService.findAll();
+        setCategories(cats);
+
+        const counts: Record<number, number> = {};
+        await Promise.all(cats.map(async (cat) => {
+          try {
+            const products = await productService.findByCategory(cat.id);
+            counts[cat.id] = products.length;
+          } catch (error) {
+            console.error(`Error fetching products for category ${cat.id}`, error);
+            counts[cat.id] = 0;
+          }
+        }));
+        
+        setCategoryCounts(counts);
+      } catch (err) {
+        console.error("Error al cargar categorías", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  const getProductCount = (categoryId: number) => {
+    const count = categoryCounts[categoryId] || 0;
     return count === 1 ? '1 PRODUCTO' : `${count} PRODUCTOS`;
   };
+
+  if (loading) {
+     return <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-zinc-900">
+        <p className="text-xl text-gray-600 dark:text-gray-300">Cargando categorías...</p>
+     </div>
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br dark:from-zinc-900 dark:to-black font-sans">
@@ -37,8 +78,8 @@ export default function CategoriesPage() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-60 group-hover:opacity-40 transition-opacity z-10" />
                    {/* eslint-disable-next-line @next/next/no-img-element */}
                    <img 
-                     src={category.image} 
-                     alt={category.name} 
+                     src={category.imageUrl || '/placeholder.png'} 
+                     alt={category.nombre} 
                      className="w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-110"
                    />
                 </div>
@@ -46,7 +87,7 @@ export default function CategoriesPage() {
                 <div className="flex flex-col justify-between flex-grow relative z-20 bg-white dark:bg-zinc-800">
                   <div className="p-6 flex items-center justify-center flex-grow">
                     <h2 className="text-2xl text-center font-bold text-[#59AB9B] dark:text-white group-hover:text-[#F6AA28] dark:group-hover:text-blue-400 transition-colors drop-shadow-md">
-                      {category.name}
+                      {category.nombre}
                     </h2>
                   </div>
                   

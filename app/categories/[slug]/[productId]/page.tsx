@@ -1,4 +1,4 @@
-import { getProductById, getCategoryBySlug } from '@/lib/data';
+import { productService, categoryService } from '@/lib/api';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import ProductDetail from '@/components/ProductDetail';
@@ -9,12 +9,16 @@ export default async function ProductPage(props: {
   const params = await props.params;
   const { slug, productId } = params;
   
-  const category = getCategoryBySlug(slug);
-  const product = getProductById(productId);
+  try {
+    const category = await categoryService.findOne(slug);
+    const product = await productService.findOne(Number(productId));
 
-  if (!category || !product) {
+    if (!category || !product) {
+      notFound();
+    }
+
+    return <ProductDetail product={product} category={category} />;
+  } catch (error) {
     notFound();
   }
-
-  return <ProductDetail product={product} category={category} />;
-}
+} 
