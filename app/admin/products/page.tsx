@@ -4,12 +4,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { productService, categoryService, Category, Product } from '@/lib/api';
 
 interface ProductOption {
+  id?: number;
   nombre: string;
   precio: number;
   stock: number;
 }
 
 interface ProductImage {
+  id?: number;
   imageUrl: string;
   displayOrder: number;
 }
@@ -20,6 +22,9 @@ export default function ProductsPage() {
   const [uploading, setUploading] = useState(false);
   const [galleryUploading, setGalleryUploading] = useState(false);
   
+  // Estado para modo Edición
+  const [editingId, setEditingId] = useState<number | null>(null);
+
   // Estado básico
   const [productData, setProductData] = useState({
     nombre: '',
@@ -43,12 +48,112 @@ export default function ProductsPage() {
   const loadProducts = useCallback(async () => {
     try {
       const data = await productService.findAll();
-      console.log('Productos cargados:', data); 
       setProducts(data);
     } catch (error) {
       console.error('Error cargando productos:', error);
     }
   }, []);
+
+  const resetForm = () => {
+    setProductData({
+        nombre: '',
+        categoryId: categories.length > 0 ? categories[0].id.toString() : '',
+        precioBase: 0,
+        stock: 0,
+        sku: '',
+        descripcionPrincipal: '',
+        descripcionCorta: '',
+        descripcionLarga: '',
+        imagenPrincipal: ''
+      });
+      setOptions([]);
+      setGalleryImages([]);
+      setEditingId(null);
+  };
+
+  const handleEditClick = async (product: Product) => {
+    // Marcamos que estamos editando este ID
+    setEditingId(product.id);
+    
+    // 1. Seteamos datos PRELIMINARES que ya tenemos en la lista (para feedback rápido)
+    setProductData({
+        nombre: product.nombre || '',
+        categoryId: product.categoryId ? product.categoryId.toString() : (categories.length > 0 ? categories[0].id.toString() : ''),
+        precioBase: Number(product.precioBase),
+        stock: Number(product.stock),
+        sku: product.sku || '',
+        descripcionPrincipal: product.descripcionPrincipal || '',
+        descripcionCorta: product.descripcionCorta || '',
+        descripcionLarga: product.descripcionLarga || '',
+        imagenPrincipal: product.imagenPrincipal || ''
+    });
+
+    // Limpiamos estados complejos mientras carga lo real
+    setGalleryImages([]);
+    setOptions([]);
+    
+    // Scroll arriba
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // 2. Traemos la DATA COMPLETA del servidor
+    try {
+        const fullProduct = await productService.findOne(product.id);
+        
+        let foundCategoryId = fullProduct.categoryId ? fullProduct.categoryId.toString() : '';
+      
+        // FIX: Si el backend no devuelve categoryId, buscamos manualmente en qué categoría está el producto
+        if (!foundCategoryId && categories.length > 0) {
+           // Creamos una promesa por cada categoría para buscar el producto
+           const results = await Promise.all(
+             categories.map(async (cat) => {
+               try {
+                 const prods = await productService.findByCategory(cat.id);
+                 return prods.some(p => p.id === fullProduct.id) ? cat.id.toString() : null;
+               } catch (e) {
+                 return null;
+               }
+             })
+           );
+           // Tomamos el primer resultado no nulo
+           foundCategoryId = results.find(r => r !== null) || foundCategoryId;
+        }
+      
+        // Actualizamos con la data fresca y la categoría encontrada
+        setProductData(prev => ({
+            ...prev,
+            nombre: fullProduct.nombre || prev.nombre,
+            categoryId: foundCategoryId || prev.categoryId,
+            precioBase: Number(fullProduct.precioBase),
+            stock: Number(fullProduct.stock),
+            sku: fullProduct.sku || prev.sku,
+            descripcionPrincipal: fullProduct.descripcionPrincipal || prev.descripcionPrincipal,
+            descripcionCorta: fullProduct.descripcionCorta || prev.descripcionCorta,
+            descripcionLarga: fullProduct.descripcionLarga || prev.descripcionLarga,
+            imagenPrincipal: fullProduct.imagenPrincipal || prev.imagenPrincipal
+        }));
+
+        // Mapear imágenes si existen desde el detalle completo
+        if (fullProduct.images && fullProduct.images.length > 0) {
+            setGalleryImages(fullProduct.images);
+        }
+
+        // Mapear opciones si existen desde el detalle completo
+        if (fullProduct.options && fullProduct.options.length > 0) {
+            // Aseguramos conversión de tipos
+            const mappedOptions = fullProduct.options.map(opt => ({
+                id: opt.id,
+                nombre: opt.nombre,
+                precio: Number(opt.precio),
+                stock: Number(opt.stock)
+            }));
+            setOptions(mappedOptions);
+        }
+
+    } catch (error) {
+        console.error("Error cargando detalles del producto:", error);
+        alert("No se pudieron cargar los detalles completos (opciones/imagenes).");
+    }
+  };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -131,12 +236,12 @@ export default function ProductsPage() {
     categoryService.findAll()
       .then(data => {
         setCategories(data);
-        if (data.length > 0) {
+        if (data.length > 0 && !editingId) {
             setProductData(prev => ({ ...prev, categoryId: data[0].id.toString() }));
         }
       })
       .catch(err => console.error('Error cargando categorías', err));
-  }, [loadProducts]);
+  }, [loadProducts, editingId]);
 
   const handleProductChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -171,23 +276,17 @@ export default function ProductsPage() {
 
       console.log('Enviando payload:', payload);
 
-      await productService.create(payload);
-      alert('Producto creado con éxito');
+      if (editingId) {
+        await productService.update(editingId, payload);
+        alert('Producto actualizado con éxito');
+      } else {
+        await productService.create(payload);
+        alert('Producto creado con éxito');
+      }
+      
       loadProducts();
-      // Reset forms
-      setProductData({
-        nombre: '',
-        categoryId: categories.length > 0 ? categories[0].id.toString() : '',
-        precioBase: 0,
-        stock: 0,
-        sku: '',
-        descripcionPrincipal: '',
-        descripcionCorta: '',
-        descripcionLarga: '',
-        imagenPrincipal: ''
-      });
-      setOptions([]);
-      setGalleryImages([]);
+      resetForm();
+
     } catch (error) {
       if (error instanceof Error) {
         alert(`Error: ${error.message}`);
@@ -198,301 +297,307 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold text-gray-800 mb-8">Gestión de Productos</h1>
-
-      <div className="bg-white rounded-xl shadow-md p-6">
-        <h2 className="text-xl font-semibold text-gray-700 mb-6 pb-2 border-b">Crear Nuevo Producto</h2>
-        
+    <div className="space-y-12">
+      {/* Formulario de Producto */}
+      <section className="bg-white p-6 rounded-lg shadow-md border border-gray-100">
+        <h2 className="text-2xl font-bold mb-6 text-gray-800 flex justify-between items-center">
+            {editingId ? 'Editar Producto' : 'Crear Nuevo Producto'}
+             {editingId && (
+                <button 
+                    onClick={resetForm}
+                    className="text-sm text-gray-500 hover:text-red-500 underline"
+                >
+                    Cancelar Edición
+                </button>
+            )}
+        </h2>
         <form onSubmit={handleProductSubmit} className="space-y-6">
-          {/* Basic Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Nombre del Producto</label>
-              <input 
-                type="text" 
-                name="nombre" 
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+              <input
+                type="text"
+                name="nombre"
                 value={productData.nombre}
                 onChange={handleProductChange}
-                className="w-full border-gray-300 rounded-md shadow-sm focus:ring-[#59AB9B] focus:border-[#59AB9B] px-4 py-2 border" 
-                placeholder="Ej: Cenizario..."
-                required 
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-[#59AB9B] focus:border-[#59AB9B]"
+                required
               />
             </div>
+            
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Categoría</label>
-              <select 
-                name="categoryId" 
+              <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+              <select
+                name="categoryId"
                 value={productData.categoryId}
                 onChange={handleProductChange}
-                className="w-full border-gray-300 rounded-md shadow-sm focus:ring-[#59AB9B] focus:border-[#59AB9B] px-4 py-2 border bg-white"
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-[#59AB9B] focus:border-[#59AB9B]"
+                required
               >
-                {categories.length === 0 && <option value="">Cargando categorías...</option>}
                 {categories.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.nombre}</option>
+                  <option key={cat.id} value={cat.id}>{cat.nombre}</option>
                 ))}
               </select>
             </div>
-            
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Precio Base ($)</label>
-              <input 
-                type="number" 
+              <label className="block text-sm font-medium text-gray-700 mb-1">Precio Base</label>
+              <input
+                type="number"
                 name="precioBase"
                 value={productData.precioBase}
                 onChange={handleProductChange}
-                className="w-full border-gray-300 rounded-md shadow-sm focus:ring-[#59AB9B] focus:border-[#59AB9B] px-4 py-2 border" 
-                min="0"
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-[#59AB9B] focus:border-[#59AB9B]"
+                required
               />
             </div>
-            
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Stock Inicial</label>
-              <input 
-                type="number" 
+              <label className="block text-sm font-medium text-gray-700 mb-1">Stock</label>
+              <input
+                type="number"
                 name="stock"
                 value={productData.stock}
                 onChange={handleProductChange}
-                className="w-full border-gray-300 rounded-md shadow-sm focus:ring-[#59AB9B] focus:border-[#59AB9B] px-4 py-2 border" 
-                min="0"
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-[#59AB9B] focus:border-[#59AB9B]"
+                required
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">SKU (Código)</label>
-              <input 
-                type="text" 
+             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
+              <input
+                type="text"
                 name="sku"
                 value={productData.sku}
                 onChange={handleProductChange}
-                className="w-full border-gray-300 rounded-md shadow-sm focus:ring-[#59AB9B] focus:border-[#59AB9B] px-4 py-2 border" 
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-[#59AB9B] focus:border-[#59AB9B]"
+                required
               />
             </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Imagen Principal</label>
-              
-              <input 
-                type="file" 
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="block w-full text-sm text-gray-500
-                  file:mr-4 file:py-2 file:px-4
-                  file:rounded-full file:border-0
-                  file:text-sm file:font-semibold
-                  file:bg-[#59AB9B] file:text-white
-                  hover:file:bg-[#4a8f82]
-                "
-              />
-              
-              {uploading && <p className="text-sm text-blue-500 mt-2">Subiendo imagen...</p>}
 
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Imagen Principal</label>
+              <div className="flex items-center space-x-4">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="w-full p-2 border border-gray-300 rounded-md text-sm text-gray-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-full file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-[#59AB9B] file:text-white
+                    hover:file:bg-[#4a9688]"
+                />
+                {uploading && <span className="text-sm text-gray-500">Subiendo...</span>}
+              </div>
               {productData.imagenPrincipal && (
-                 <div className="mt-4">
-                   <p className="text-xs text-gray-500 mb-1">Vista previa:</p>
-                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                   <img 
-                     src={productData.imagenPrincipal} 
-                     alt="Preview" 
-                     className="h-32 object-contain rounded border border-gray-200" 
-                   />
-                   <input type="hidden" name="imagenPrincipal" value={productData.imagenPrincipal} />
-                 </div>
+                 // eslint-disable-next-line @next/next/no-img-element
+                <img src={productData.imagenPrincipal} alt="Preview" className="h-32 mt-4 object-cover rounded-md border" />
               )}
             </div>
-          </div>
-
-          {/* Descriptions */}
-          <div className="space-y-4">
-             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Descripción Corta (Card)</label>
-              <textarea 
-                name="descripcionCorta" 
-                value={productData.descripcionCorta}
-                onChange={handleProductChange}
-                rows={2}
-                className="w-full border-gray-300 rounded-md shadow-sm focus:ring-[#59AB9B] focus:border-[#59AB9B] px-4 py-2 border"
-                placeholder="Breve descripción..."
-              ></textarea>
-             </div>
-
-             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Descripción Principal</label>
-              <textarea 
-                name="descripcionPrincipal" 
-                value={productData.descripcionPrincipal}
-                onChange={handleProductChange}
-                rows={3}
-                className="w-full border-gray-300 rounded-md shadow-sm focus:ring-[#59AB9B] focus:border-[#59AB9B] px-4 py-2 border"
-                placeholder="Descripción general..."
-              ></textarea>
-             </div>
-
-             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Descripción Larga (Detalle)</label>
-              <textarea 
-                name="descripcionLarga" 
-                value={productData.descripcionLarga}
-                onChange={handleProductChange}
-                rows={5}
-                className="w-full border-gray-300 rounded-md shadow-sm focus:ring-[#59AB9B] focus:border-[#59AB9B] px-4 py-2 border"
-                placeholder="Texto extenso..."
-              ></textarea>
-             </div>
-          </div>
-
-          {/* GALERÍA DE IMÁGENES */}
-          <div className="border-t pt-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Galería de Imágenes</h3>
-            <div className="space-y-4">
-                <input 
-                  type="file" 
+            
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Galería de Imágenes Adicionales</label>
+              <div className="flex items-center space-x-4 mb-4">
+                <input
+                  type="file"
                   accept="image/*"
                   onChange={handleGalleryUpload}
-                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[#F6AA28] file:text-white hover:file:bg-orange-400"
+                   className="w-full p-2 border border-gray-300 rounded-md text-sm text-gray-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-full file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-[#59AB9B] file:text-white
+                    hover:file:bg-[#4a9688]"
                 />
-                {galleryUploading && <p className="text-sm text-blue-500">Subiendo a galería...</p>}
-                
-                <div className="flex flex-wrap gap-4 mt-4">
-                    {galleryImages.map((img, index) => (
-                        <div key={index} className="relative w-24 h-24 border rounded overflow-hidden">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={img.imageUrl} alt={`Gallery ${index}`} className="w-full h-full object-cover" />
+                {galleryUploading && <span className="text-sm text-gray-500">Subiendo...</span>}
+              </div>
+              
+              {galleryImages.length > 0 && (
+                <div className="grid grid-cols-4 gap-4 mt-2">
+                    {galleryImages.map((img, idx) => (
+                        <div key={idx} className="relative group border rounded-md overflow-hidden">
+                             {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={img.imageUrl} alt={`Gallery ${idx}`} className="w-full h-24 object-cover" />
                             <button
-                                type="button"
-                                onClick={() => removeGalleryImage(index)}
-                                className="absolute top-0 right-0 bg-red-500 text-white rounded-bl p-1 text-xs"
+                                type="button" 
+                                onClick={() => removeGalleryImage(idx)}
+                                className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                             >
-                                X
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                         </div>
                     ))}
-                    {galleryImages.length === 0 && <p className="text-gray-400 text-sm italic">Sin imágenes adicionales</p>}
                 </div>
+              )}
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Descripción Principal</label>
+              <textarea
+                name="descripcionPrincipal"
+                value={productData.descripcionPrincipal}
+                onChange={handleProductChange}
+                rows={3}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-[#59AB9B] focus:border-[#59AB9B]"
+              />
+            </div>
+            
+             <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Descripción Corta</label>
+              <textarea
+                name="descripcionCorta"
+                value={productData.descripcionCorta}
+                onChange={handleProductChange}
+                rows={2}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-[#59AB9B] focus:border-[#59AB9B]"
+              />
+            </div>
+
+             <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Descripción Larga</label>
+              <textarea
+                name="descripcionLarga"
+                value={productData.descripcionLarga}
+                onChange={handleProductChange}
+                rows={4}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-[#59AB9B] focus:border-[#59AB9B]"
+              />
             </div>
           </div>
 
-          {/* OPCIONES DEL PRODUCTO */}
+          {/* Sección de Opciones / Variantes */}
           <div className="border-t pt-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Opciones / Variantes</h3>
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Variantes del Producto (Opcional)</h3>
             
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+            <div className="flex gap-4 items-end mb-4 bg-gray-50 p-4 rounded-md">
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Nombre Opción</label>
                     <input 
                         type="text" 
-                        placeholder="Nombre Opción (Ej: Filas 1-2)" 
-                        className="border p-2 rounded"
+                        placeholder="Ej: Cenizario filas 6-7"
                         value={newOption.nombre}
-                        onChange={(e) => setNewOption({ ...newOption, nombre: e.target.value })}
+                        onChange={(e) => setNewOption({...newOption, nombre: e.target.value})}
+                        className="p-2 border border-gray-300 rounded-md text-sm"
                     />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Precio</label>
                     <input 
                         type="number" 
-                        placeholder="Precio" 
-                        className="border p-2 rounded"
+                        placeholder="0"
                         value={newOption.precio}
-                        onChange={(e) => setNewOption({ ...newOption, precio: Number(e.target.value) })}
+                        onChange={(e) => setNewOption({...newOption, precio: Number(e.target.value)})}
+                        className="p-2 border border-gray-300 rounded-md text-sm w-32"
                     />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Stock</label>
                     <input 
                         type="number" 
-                        placeholder="Stock" 
-                        className="border p-2 rounded"
+                        placeholder="0"
                         value={newOption.stock}
-                        onChange={(e) => setNewOption({ ...newOption, stock: Number(e.target.value) })}
+                        onChange={(e) => setNewOption({...newOption, stock: Number(e.target.value)})}
+                        className="p-2 border border-gray-300 rounded-md text-sm w-24"
                     />
                 </div>
                 <button 
-                    type="button" 
+                    type="button"
                     onClick={addOption}
-                    className="bg-gray-800 text-white px-4 py-2 rounded text-sm hover:bg-gray-700"
+                    className="bg-[#59AB9B] text-white px-4 py-2 rounded-md hover:bg-[#4a9688] text-sm font-bold"
                 >
-                    + Agregar Opción
+                    Agregar Opción
                 </button>
             </div>
 
-            <div className="space-y-2">
-                {options.map((opt, index) => (
-                    <div key={index} className="flex justify-between items-center bg-white p-3 border rounded shadow-sm">
-                        <div>
-                            <span className="font-bold text-gray-700 block">{opt.nombre}</span>
-                            <span className="text-sm text-gray-500">Precio: ${opt.precio} | Stock: {opt.stock}</span>
-                        </div>
-                        <button 
-                            type="button" 
-                            onClick={() => removeOption(index)}
-                            className="text-red-500 hover:text-red-700 text-sm font-semibold"
-                        >
-                            Eliminar
-                        </button>
-                    </div>
-                ))}
-                {options.length === 0 && <p className="text-gray-400 text-sm italic">Sin opciones asignadas</p>}
-            </div>
+            {options.length > 0 && (
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                            <tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {options.map((opt, idx) => (
+                                <tr key={idx}>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{opt.nombre}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${opt.precio}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{opt.stock}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => removeOption(idx)}
+                                            className="text-red-600 hover:text-red-900"
+                                        >
+                                            Eliminar
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
           </div>
 
-          {/* Actions */}
-          <div className="flex justify-end pt-4">
-            <button 
-              type="submit"
-              className="bg-[#59AB9B] text-white px-8 py-3 rounded-lg font-bold hover:bg-[#4a8f82] transition-colors shadow-lg"
-            >
-              Guardar Producto
-            </button>
-          </div>
+          <button
+            type="submit"
+            className="w-full bg-[#59AB9B] text-white font-bold py-3 px-4 rounded-md hover:bg-[#4a9688] transition-colors shadow-lg"
+          >
+            {editingId ? 'Guardar Cambios' : 'Crear Producto'}
+          </button>
         </form>
-      </div>
+      </section>
 
-      {/* Lista de Productos Existentes */}
-      <div className="bg-white rounded-xl shadow-md p-6 mt-8">
-        <h2 className="text-xl font-semibold text-gray-700 mb-6 pb-2 border-b">Productos Existentes</h2>
+      {/* Lista de Productos */}
+      <section className="bg-white rounded-lg shadow-md border border-gray-100 overflow-hidden">
+        <h2 className="text-xl font-bold p-6 border-b border-gray-200 text-gray-800">Inventario Actual</h2>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Imagen</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio Base</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Variantes</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {products.map((prod) => (
-                <tr key={prod.id}>
+              {products.map((product) => (
+                <tr key={product.id}>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img 
-                        src={prod.imagenPrincipal || '/placeholder.svg'} 
-                        alt={prod.nombre} 
-                        className="h-10 w-10 rounded-full object-cover" 
-                        onError={(e) => { 
-                          const target = e.currentTarget;
-                          if (target.src.includes('/placeholder.svg')) return;
-                          target.src = '/placeholder.svg'; 
-                        }}
-                    />
+                     {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={product.imagenPrincipal || '/placeholder.png'} alt={product.nombre} className="h-10 w-10 rounded-full object-cover" />
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{prod.nombre}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${prod.precioBase}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                     {/* El backend actualmente no devuelve options en la lista simple, 
-                         habría que adaptar findAll si quisiéramos verlo aquí. 
-                         Por ahora mostramos si tiene stock base. */}
-                     {prod.stock} (Stock Base)
+                  <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{product.nombre}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-gray-500">
+                    ${product.precioBase} 
+                    {product.options && product.options.length > 0 && <span className="text-xs text-blue-500 ml-1">({product.options.length} vars)</span>}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{prod.sku}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-gray-500">{product.stock}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button 
+                        onClick={() => handleEditClick(product)}
+                        className="text-indigo-600 hover:text-indigo-900 mr-4"
+                    >
+                        Editar
+                    </button>
+                    {/* Placeholder para Delete si se implementa despues */}
+                    {/* <button className="text-red-600 hover:text-red-900">Eliminar</button> */}
+                  </td>
                 </tr>
               ))}
-              {products.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
-                    No hay productos registrados.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

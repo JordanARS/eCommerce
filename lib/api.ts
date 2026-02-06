@@ -115,6 +115,23 @@ export const productService = {
       const res = await fetch(`${API_URL}/products?categoryId=${categoryId}`);
       if (!res.ok) throw new Error('Error al obtener productos de la categoría');
       return res.json();
+  },
+
+  async update(id: number, data: Partial<CreateProductDto>) {
+    const res = await fetch(`${API_URL}/products/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Error al actualizar el producto');
+      }
+      
+    return res.json();
   }
 };
 

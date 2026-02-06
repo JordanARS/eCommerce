@@ -6,6 +6,7 @@ import { Category, Product } from '@/lib/api';
 import MetodosPago from './metodosPago';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import Link from 'next/link';
+import { useCart } from '@/context/CartContext';
 
 interface ProductDetailProps {
   product: Product;
@@ -15,6 +16,7 @@ interface ProductDetailProps {
 type ProductOption = NonNullable<Product['options']>[number];
 
 export default function ProductDetail({ product, category }: ProductDetailProps) {
+  const { addToCart } = useCart();
   const [selectedImage, setSelectedImage] = useState(
     product.imagenPrincipal || (product.images && product.images.length > 0 ? product.images[0].imageUrl : '/placeholder.svg')
   );
@@ -55,10 +57,24 @@ export default function ProductDetail({ product, category }: ProductDetailProps)
     setSelectedOption(option || null);
   };
 
+  const handleAddToCart = () => {
+    addToCart({
+      productId: product.id,
+      slug: product.slug,
+      name: product.nombre,
+      price: currentPrice,
+      quantity: quantity,
+      image: selectedImage,
+      selectedOptionId: selectedOption?.id,
+      selectedOptionName: selectedOption?.nombre
+    });
+  };
+
   return (
     <div className="min-h-screen bg-white text-gray-800 font-sans pb-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
          {/* Breadcrumb */}
+
          <nav className="text-sm mb-8 text-gray-500">
            <Link href="/" className="hover:text-[#59AB9B]">Inicio</Link> 
            <span className="mx-2">/</span>
@@ -176,6 +192,7 @@ export default function ProductDetail({ product, category }: ProductDetailProps)
                        <button 
                          className={`flex-grow bg-[#59AB9B] text-white font-bold py-3 px-8 rounded-md shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 active:translate-y-0 uppercase tracking-wider ${!selectedOption && hasOptions ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#4a9688]'}`}
                          disabled={hasOptions && !selectedOption}
+                         onClick={handleAddToCart}
                        >
                          Añadir al Carrito
                        </button>
