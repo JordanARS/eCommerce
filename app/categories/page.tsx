@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { categoryService, productService, Category, Product } from '@/lib/api';
 
 export default function CategoriesPage() {
@@ -51,8 +52,16 @@ export default function CategoriesPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br dark:from-zinc-900 dark:to-black font-sans">
       {/* Hero Section */}
-      <div className="relative bg-[#EEEEEE] text-black py-16 px-4 sm:px-6 lg:px-8 overflow-hidden">
-        <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] mix-blend-overlay"></div>
+      <div className="relative bg-[#EEEEEE] text-black py-20 px-4 sm:px-6 lg:px-8 overflow-hidden">
+        <div className="absolute inset-0 z-0">
+          <Image
+            src="/PortadaParqueCementerio.jpg"
+            alt="Fondo Servicios"
+            fill
+            className="object-cover object-[center_50%] opacity-30"
+            priority
+          />
+        </div>
         <div className="relative max-w-7xl mx-auto text-center z-10">
           <h1 className="text-4xl md:text-5xl text-[#59AB9B] font-extrabold tracking-tight mb-4 drop-shadow-md">
             Nuestros Servicios

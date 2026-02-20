@@ -5,6 +5,7 @@ import { categoryService, CreateCategoryDto, Category } from '@/lib/api';
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [categoryData, setCategoryData] = useState<CreateCategoryDto>({
     nombre: '',
     slug: '',
@@ -68,9 +69,15 @@ export default function CategoriesPage() {
   const handleCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await categoryService.create(categoryData);
-      alert('Categoría creada con éxito');
+      if (editingId) {
+        await categoryService.update(editingId, categoryData);
+        alert('Categoría actualizada con éxito');
+      } else {
+        await categoryService.create(categoryData);
+        alert('Categoría creada con éxito');
+      }
       setCategoryData({ nombre: '', slug: '', descripcion: '', descripcion2: '', imageUrl: '' });
+      setEditingId(null);
       loadCategories(); // Recargar la lista
     } catch (error) {
            if (error instanceof Error) {
@@ -79,6 +86,38 @@ export default function CategoriesPage() {
              alert('Ocurrió un error desconocido');
            }
     }
+  };
+
+          {editingId ? 'Editar Categoría' : 'Nueva Categoría'}
+        
+  const handleEdit = (category: Category) => {
+    setEditingId(category.id);
+    setCategoryData({
+      nombre: category.nombre,
+      slug: category.slug,
+      descripcion: category.descripcion,
+      descripcion2: category.descripcion2 || '',
+      imageUrl: category.imageUrl || ''
+    });
+    // Scroll to top to see the form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDelete = async (id: number) => {
+    if (confirm('¿Estás seguro de que deseas eliminar esta categoría?')) {
+      try {
+        await categoryService.remove(id);
+        loadCategories();
+      } catch (error) {
+        console.error('Error eliminando categoría:', error);
+        alert('Error al eliminar la categoría');
+      }
+    }
+  };
+
+  const handleCancel = () => {
+    setEditingId(null);
+    setCategoryData({ nombre: '', slug: '', descripcion: '', descripcion2: '', imageUrl: '' });
   };
 
   return (
@@ -166,9 +205,19 @@ export default function CategoriesPage() {
                />
             </div>
           </div>
-          <div className="flex justify-end pt-4">
+
+          <div className="flex justify-end pt-4 gap-4">
+            {editingId && (
+              <button 
+                type="button" 
+                onClick={handleCancel}
+                className="bg-gray-500 text-white px-8 py-3 rounded-lg font-bold hover:bg-gray-600 transition-colors shadow-lg"
+              >
+                Cancelar
+              </button>
+            )}
             <button type="submit" className="bg-[#59AB9B] text-white px-8 py-3 rounded-lg font-bold hover:bg-[#4a8f82] transition-colors shadow-lg">
-              Guardar Categoría
+              {editingId ? 'Actualizar Categoría' : 'Guardar Categoría'}
             </button>
           </div>
         </form>
@@ -185,6 +234,7 @@ export default function CategoriesPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Slug</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Imagen</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -194,12 +244,26 @@ export default function CategoriesPage() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{cat.nombre}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cat.slug}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 truncate max-w-xs">{cat.imageUrl || '-'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <button 
+                      onClick={() => handleEdit(cat)}
+                      className="text-indigo-600 hover:text-indigo-900 mr-4"
+                    >
+                      Editar
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(cat.id)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      Eliminar
+                    </button>
+                  </td>
                 </tr>
               ))}
               {categories.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-6 py-4 text-center text-gray-500">
-                    No hay categorías registradas en el Backend.
+                  <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
+                    No hay categorías registradas.
                   </td>
                 </tr>
               )}

@@ -47,6 +47,32 @@ export const categoryService = {
     const res = await fetch(`${API_URL}/categories/${slug}`);
     if (!res.ok) throw new Error('Error al obtener la categoría');
     return res.json();
+  },
+
+  async update(id: number, data: Partial<CreateCategoryDto>) {
+    const res = await fetch(`${API_URL}/categories/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+    
+    if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Error al actualizar la categoría');
+    }
+    
+    return res.json();
+  },
+
+  async remove(id: number) {
+    const res = await fetch(`${API_URL}/categories/${id}`, {
+      method: 'DELETE',
+    });
+    
+    if (!res.ok) throw new Error('Error al eliminar la categoría');
+    return true; 
   }
 };
 
