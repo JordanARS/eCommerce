@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { categoryService, productService, Category, Product } from '@/lib/api';
+import { categoryService, productService, Category} from '@/lib/api';
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -22,14 +22,14 @@ export default function CategoriesPage() {
             const products = await productService.findByCategory(cat.id);
             counts[cat.id] = products.length;
           } catch (error) {
-            console.error(`Error fetching products for category ${cat.id}`, error);
+            console.error(error);
             counts[cat.id] = 0;
           }
         }));
         
         setCategoryCounts(counts);
       } catch (err) {
-        console.error("Error al cargar categorías", err);
+        console.error(err);
       } finally {
         setLoading(false);
       }

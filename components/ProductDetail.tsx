@@ -106,7 +106,6 @@ export default function ProductDetail({ product, category }: ProductDetailProps)
                       className={`aspect-square rounded-md overflow-hidden cursor-pointer border-2 transition-colors ${selectedImage === img ? 'border-[#59AB9B]' : 'border-transparent hover:border-gray-300'}`}
                       onClick={() => setSelectedImage(img)}
                     >
-                       {/* eslint-disable-next-line @next/next/no-img-element */}
                        <Image src={img} alt={`Vista ${idx + 1}`} width={150} height={150} className="w-full h-full object-cover" />
                     </div>
                   ))}

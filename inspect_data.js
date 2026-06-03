@@ -1,16 +1,13 @@
-const API_URL = 'http://localhost:3000/api';
+/* const API_URL = 'http://localhost:3000/api';
 
 async function inspect() {
   try {
     const categoriesRes = await fetch(`${API_URL}/categories`);
     const categories = await categoriesRes.json();
-    console.log('Categories Count:', categories.length);
 
     const productsRes = await fetch(`${API_URL}/products`);
     const products = await productsRes.json();
-    console.log('Products Count:', products.length);
 
-    console.log('--- Detail Check ---');
     if (products.length > 0) {
         const firstId = products[0].id;
         const detailRes = await fetch(`${API_URL}/products/${firstId}`);
@@ -40,3 +37,4 @@ async function inspect() {
 }
 
 inspect();
+ */

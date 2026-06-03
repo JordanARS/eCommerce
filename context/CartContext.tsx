@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { authService } from '@/lib/api';
 
 export interface CartItem {
   cartId: string; // Único especificamente para este combo en el carrito
@@ -24,6 +25,7 @@ interface CartContextType {
   cartTotal: number;
   cartCount: number;
   isCartOpen: boolean;
+  isAuthenticated: boolean;
   toggleCart: () => void;
 }
 
@@ -33,46 +35,157 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUserKey, setCurrentUserKey] = useState<string | null>(null);
 
-  // Crear en local storage
-  useEffect(() => {
-    const savedCart = localStorage.getItem('shopping-cart');
+  const getUserCartKey = (userKey: string) => `shopping-cart:user:${userKey}`;
+
+  const extractUserKey = (profile: unknown): string | null => {
+    if (!profile || typeof profile !== 'object') return null;
+
+    const raw = profile as Record<string, unknown>;
+    const nested = raw.user && typeof raw.user === 'object'
+      ? (raw.user as Record<string, unknown>)
+      : raw.data && typeof raw.data === 'object'
+        ? (raw.data as Record<string, unknown>)
+        : null;
+
+    const idCandidate = raw.id ?? raw.userId ?? raw.sub ?? nested?.id ?? nested?.userId;
+    if (typeof idCandidate === 'number' || typeof idCandidate === 'string') {
+      return `id:${String(idCandidate)}`;
+    }
+
+    const emailCandidate = raw.email ?? nested?.email;
+    if (typeof emailCandidate === 'string' && emailCandidate.trim()) {
+      return `email:${emailCandidate.trim().toLowerCase()}`;
+    }
+
+    return null;
+  };
+
+  const mergeItem = (items: CartItem[], item: Omit<CartItem, 'cartId'>) => {
+    const existingItemIndex = items.findIndex(
+      (i) => i.productId === item.productId && i.selectedOptionId === item.selectedOptionId
+    );
+
+    if (existingItemIndex >= 0) {
+      const nextItems = [...items];
+      nextItems[existingItemIndex].quantity += item.quantity;
+      return nextItems;
+    }
+
+    return [...items, { ...item, cartId: crypto.randomUUID() }];
+  };
+
+  const syncAuthAndCart = React.useCallback(async () => {
+    const profile = await authService.getProfile();
+    const userKey = extractUserKey(profile);
+
+    if (!userKey) {
+      setIsAuthenticated(false);
+      setCurrentUserKey(null);
+      setCart([]);
+      setIsCartOpen(false);
+      setIsInitialized(true);
+      return;
+    }
+
+    setIsAuthenticated(true);
+    setCurrentUserKey(userKey);
+
+    const cartKey = getUserCartKey(userKey);
+    let nextCart: CartItem[] = [];
+    const savedCart = localStorage.getItem(cartKey);
+
     if (savedCart) {
       try {
-        setCart(JSON.parse(savedCart));
+        nextCart = JSON.parse(savedCart);
       } catch (e) {
         console.error('No se pudo analizar el carrito desde el almacenamiento local', e);
       }
+    } else {
+      const legacyCart = localStorage.getItem('shopping-cart');
+      if (legacyCart) {
+        try {
+          nextCart = JSON.parse(legacyCart);
+          localStorage.removeItem('shopping-cart');
+        } catch (e) {
+          console.error('No se pudo migrar el carrito legado', e);
+        }
+      }
     }
+
+    const pendingItemRaw = localStorage.getItem('pending-cart-item');
+    if (pendingItemRaw) {
+      try {
+        const pendingItem = JSON.parse(pendingItemRaw) as Omit<CartItem, 'cartId'>;
+        nextCart = mergeItem(nextCart, pendingItem);
+        setIsCartOpen(true);
+      } catch (e) {
+        console.error('No se pudo procesar el item pendiente', e);
+      } finally {
+        localStorage.removeItem('pending-cart-item');
+      }
+    }
+
+    setCart(nextCart);
     setIsInitialized(true);
   }, []);
 
-  // Guardar en local storage
+  // Sincroniza el carrito y la sesión al montar y cuando cambie el estado de auth.
   useEffect(() => {
-    if (isInitialized) {
-      localStorage.setItem('shopping-cart', JSON.stringify(cart));
+    syncAuthAndCart();
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        syncAuthAndCart();
+      }
+    };
+
+    const onFocus = () => {
+      syncAuthAndCart();
+    };
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === 'auth-state-changed') {
+        syncAuthAndCart();
+      }
+    };
+
+    const onLocalAuthChanged = () => {
+      syncAuthAndCart();
+    };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('auth-state-changed-local', onLocalAuthChanged);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('auth-state-changed-local', onLocalAuthChanged);
+    };
+  }, [syncAuthAndCart]);
+
+  // Guarda el carrito por usuario autenticado.
+  useEffect(() => {
+    if (isInitialized && isAuthenticated && currentUserKey !== null) {
+      localStorage.setItem(getUserCartKey(currentUserKey), JSON.stringify(cart));
     }
-  }, [cart, isInitialized]);
+  }, [cart, isInitialized, isAuthenticated, currentUserKey]);
 
   const addToCart = (item: Omit<CartItem, 'cartId'>) => {
-    setCart((prev) => {
-      // Crear una clave única para esta combinación de ítems para verificar duplicados
-      // Ejemplo: Producto 1 + Opción A es diferente de Producto 1 + Opción B
-      const existingItemIndex = prev.findIndex(
-        (i) => 
-          i.productId === item.productId && 
-          i.selectedOptionId === item.selectedOptionId
-      );
+    if (!isAuthenticated) {
+      localStorage.setItem('pending-cart-item', JSON.stringify(item));
+      const currentPath = `${window.location.pathname}${window.location.search}`;
+      window.location.href = `/auth/login?redirect=${encodeURIComponent(currentPath)}`;
+      return;
+    }
 
-      if (existingItemIndex >= 0) {
-        // Actualizar cantidad si se verifica que el ítem ya existe
-        const newCart = [...prev];
-        newCart[existingItemIndex].quantity += item.quantity;
-        return newCart;
-      } else {
-        // Agregar nuevo ítem
-        return [...prev, { ...item, cartId: crypto.randomUUID() }];
-      }
+    setCart((prev) => {
+      return mergeItem(prev, item);
     });
     setIsCartOpen(true); // Abrir carrito al agregar
   };
@@ -95,6 +208,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const toggleCart = () => {
+    if (!isAuthenticated) return;
     setIsCartOpen((prev) => !prev);
   }
 
@@ -112,6 +226,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
         cartTotal,
         cartCount,
         isCartOpen,
+        isAuthenticated,
         toggleCart
       }}
     >

@@ -1,9 +1,15 @@
 'use client';
 
 import { useCart } from '@/context/CartContext';
+import { usePathname } from 'next/navigation';
 
 export default function FloatingCartButton() {
-  const { toggleCart, cartCount } = useCart();
+  const { toggleCart, cartCount, isAuthenticated } = useCart();
+  const pathname = usePathname();
+
+  if (pathname.startsWith('/admin')) return null;
+
+  if (!isAuthenticated) return null;
 
   return (
     <button 

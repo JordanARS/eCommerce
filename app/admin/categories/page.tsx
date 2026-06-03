@@ -4,8 +4,12 @@ import { useState, useEffect } from 'react';
 import { categoryService, CreateCategoryDto, Category } from '@/lib/api';
 
 export default function CategoriesPage() {
+  const ITEMS_PER_PAGE = 7;
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
   const [categoryData, setCategoryData] = useState<CreateCategoryDto>({
     nombre: '',
     slug: '',
@@ -14,6 +18,14 @@ export default function CategoriesPage() {
     imageUrl: ''
   });
   const [uploading, setUploading] = useState(false);
+  const filteredCategories = categories.filter((category) =>
+    category.nombre.toLowerCase().includes(searchTerm.toLowerCase().trim())
+  );
+  const totalPages = Math.max(1, Math.ceil(filteredCategories.length / ITEMS_PER_PAGE));
+  const paginatedCategories = filteredCategories.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   // Función para manejar la subida de imagen
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -58,11 +70,25 @@ export default function CategoriesPage() {
     loadCategories();
   }, []);
 
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   const handleCategoryChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    const normalizedValue = name === 'slug'
+      ? value.toLowerCase().replace(/\s+/g, '-')
+      : value;
+
     setCategoryData(prev => ({
       ...prev,
-      [name]: value
+      [name]: normalizedValue
     }));
   };
 
@@ -88,8 +114,6 @@ export default function CategoriesPage() {
     }
   };
 
-          {editingId ? 'Editar Categoría' : 'Nueva Categoría'}
-        
   const handleEdit = (category: Category) => {
     setEditingId(category.id);
     setCategoryData({
@@ -133,6 +157,7 @@ export default function CategoriesPage() {
               <input 
                 type="text" 
                 name="nombre" 
+                placeholder="Compra de Lotes"
                 value={categoryData.nombre}
                 onChange={handleCategoryChange}
                 className="w-full border-gray-300 rounded-md shadow-sm focus:ring-[#59AB9B] px-4 py-2 border" 
@@ -145,6 +170,7 @@ export default function CategoriesPage() {
                 type="text" 
                 name="slug" 
                 value={categoryData.slug}
+                placeholder="compra-de-lotes"
                 onChange={handleCategoryChange}
                 className="w-full border-gray-300 rounded-md shadow-sm focus:ring-[#59AB9B] px-4 py-2 border" 
                 required 
@@ -158,7 +184,7 @@ export default function CategoriesPage() {
                  type="file" 
                  accept="image/*"
                  onChange={handleImageUpload}
-                 className="block w-full text-sm text-gray-500
+                 className="block w-1/2 text-sm text-gray-500
                    file:mr-4 file:py-2 file:px-4
                    file:rounded-full file:border-0
                    file:text-sm file:font-semibold
@@ -185,10 +211,11 @@ export default function CategoriesPage() {
                )}
             </div>
             <div className="md:col-span-2">
-               <label className="block text-sm font-medium text-gray-700 mb-2">Descripción Corta</label>
+               <label className="block text-sm font-medium text-gray-700 mb-2">Descripción Corta (Opcional)</label>
                <textarea 
                  name="descripcion" 
                  value={categoryData.descripcion}
+                 placeholder="Aqui se ingresa una breve descripción de la categoría, que se mostrará en la página principal debajo del nombre de la categoría."
                  onChange={handleCategoryChange}
                  rows={2}
                  className="w-full border-gray-300 rounded-md shadow-sm focus:ring-[#59AB9B] px-4 py-2 border"
@@ -225,7 +252,16 @@ export default function CategoriesPage() {
 
       {/* Lista de Categorías Existentes */}
       <div className="bg-white rounded-xl shadow-md p-6 mt-8">
-        <h2 className="text-xl font-semibold text-gray-700 mb-6 pb-2 border-b">Categorías Existentes</h2>
+        <div className="mb-6 pb-4 border-b flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <h2 className="text-xl font-semibold text-gray-700">Categorías Existentes</h2>
+          <input
+            type="text"
+            placeholder="Buscar por nombre de categoría..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full md:w-80 px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-[#59AB9B]"
+          />
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -233,17 +269,17 @@ export default function CategoriesPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Slug</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Imagen</th>
+                {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Imagen</th> */}
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {categories.map((cat) => (
+              {paginatedCategories.map((cat) => (
                 <tr key={cat.id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cat.id}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{cat.nombre}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cat.slug}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 truncate max-w-xs">{cat.imageUrl || '-'}</td>
+                  {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 truncate max-w-xs">{cat.imageUrl || '-'}</td> */}
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button 
                       onClick={() => handleEdit(cat)}
@@ -260,15 +296,42 @@ export default function CategoriesPage() {
                   </td>
                 </tr>
               ))}
-              {categories.length === 0 && (
+              {paginatedCategories.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
-                    No hay categorías registradas.
+                    No hay categorías para mostrar.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="flex flex-col md:flex-row items-center justify-between gap-3 pt-4 border-t border-gray-200 mt-4">
+          <p className="text-sm text-gray-600">
+            Mostrando {paginatedCategories.length} de {filteredCategories.length} categorías
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1.5 rounded-md border border-gray-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Anterior
+            </button>
+            <span className="text-sm text-gray-700">
+              Página {currentPage} de {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1.5 rounded-md border border-gray-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Siguiente
+            </button>
+          </div>
         </div>
       </div>
     </div>

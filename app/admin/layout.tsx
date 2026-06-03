@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ReactNode } from 'react';
+import LogoutButton from '@/components/LogoutButton';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
@@ -28,7 +29,23 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           >
             Productos
           </Link>
+          <Link 
+            href="/admin/users" 
+            className="block px-4 py-2 rounded hover:bg-slate-700 transition-colors"
+          >
+            Usuarios y Roles
+          </Link>
+          <Link 
+            href="/admin/orders" 
+            className="block px-4 py-2 rounded hover:bg-slate-700 transition-colors"
+          >
+            Pedidos
+          </Link>
         </nav>
+        
+        <div className="p-4 border-t border-slate-700">
+           <LogoutButton />
+        </div>
       </aside>
 
       {/* Main Content */}

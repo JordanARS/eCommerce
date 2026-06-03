@@ -17,6 +17,12 @@ interface ProductImage {
 }
 
 export default function ProductsPage() {
+  const ITEMS_PER_PAGE = 7;
+
+  const formatThousands = (value: number) => {
+    return value.toLocaleString('es-CO');
+  };
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -37,6 +43,7 @@ export default function ProductsPage() {
     descripcionLarga: '',
     imagenPrincipal: ''
   });
+  const [precioBaseInput, setPrecioBaseInput] = useState('');
 
   // Novos estados para Opciones y Galería
   const [options, setOptions] = useState<ProductOption[]>([]);
@@ -44,6 +51,18 @@ export default function ProductsPage() {
 
   // Estado temporal para agregar una nueva opción
   const [newOption, setNewOption] = useState<ProductOption>({ nombre: '', precio: 0, stock: 0 });
+  const [newOptionPrecioInput, setNewOptionPrecioInput] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const filteredProducts = products.filter((product) =>
+    product.nombre.toLowerCase().includes(searchTerm.toLowerCase().trim())
+  );
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / ITEMS_PER_PAGE));
+  const paginatedProducts = filteredProducts.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   const loadProducts = useCallback(async () => {
     try {
@@ -66,7 +85,10 @@ export default function ProductsPage() {
         descripcionLarga: '',
         imagenPrincipal: ''
       });
+      setPrecioBaseInput('');
       setOptions([]);
+        setNewOption({ nombre: '', precio: 0, stock: 0 });
+        setNewOptionPrecioInput('');
       setGalleryImages([]);
       setEditingId(null);
   };
@@ -87,6 +109,7 @@ export default function ProductsPage() {
         descripcionLarga: product.descripcionLarga || '',
         imagenPrincipal: product.imagenPrincipal || ''
     });
+      setPrecioBaseInput(Number(product.precioBase) > 0 ? formatThousands(Number(product.precioBase)) : '');
 
     // Limpiamos estados complejos mientras carga lo real
     setGalleryImages([]);
@@ -109,7 +132,7 @@ export default function ProductsPage() {
                try {
                  const prods = await productService.findByCategory(cat.id);
                  return prods.some(p => p.id === fullProduct.id) ? cat.id.toString() : null;
-               } catch (e) {
+               } catch {
                  return null;
                }
              })
@@ -131,6 +154,7 @@ export default function ProductsPage() {
             descripcionLarga: fullProduct.descripcionLarga || prev.descripcionLarga,
             imagenPrincipal: fullProduct.imagenPrincipal || prev.imagenPrincipal
         }));
+          setPrecioBaseInput(Number(fullProduct.precioBase) > 0 ? formatThousands(Number(fullProduct.precioBase)) : '');
 
         // Mapear imágenes si existen desde el detalle completo
         if (fullProduct.images && fullProduct.images.length > 0) {
@@ -224,6 +248,7 @@ export default function ProductsPage() {
     }
     setOptions(prev => [...prev, newOption]);
     setNewOption({ nombre: '', precio: 0, stock: 0 });
+    setNewOptionPrecioInput('');
   };
 
   const removeOption = (index: number) => {
@@ -243,11 +268,43 @@ export default function ProductsPage() {
       .catch(err => console.error('Error cargando categorías', err));
   }, [loadProducts, editingId]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
   const handleProductChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+
+    if (name === 'precioBase') {
+      const digitsOnly = value.replace(/\D/g, '');
+      const numericValue = digitsOnly ? Number(digitsOnly) : 0;
+      setPrecioBaseInput(digitsOnly ? formatThousands(numericValue) : '');
+      setProductData(prev => ({
+        ...prev,
+        precioBase: numericValue
+      }));
+      return;
+    }
+
+    if (name === 'stock') {
+      const digitsOnly = value.replace(/\D/g, '');
+      const numericValue = digitsOnly ? Number(digitsOnly) : 0;
+      setProductData(prev => ({
+        ...prev,
+        stock: numericValue
+      }));
+      return;
+    }
+
     setProductData(prev => ({
       ...prev,
-      [name]: name === 'precioBase' || name === 'stock' ? Number(value) : value
+      [name]: value
     }));
   };
 
@@ -343,9 +400,11 @@ export default function ProductsPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Precio Base</label>
               <input
-                type="number"
+                type="text"
                 name="precioBase"
-                value={productData.precioBase}
+                value={precioBaseInput}
+                inputMode="numeric"
+                pattern="[0-9.]*"
                 onChange={handleProductChange}
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-[#59AB9B] focus:border-[#59AB9B]"
                 required
@@ -355,8 +414,10 @@ export default function ProductsPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Stock</label>
               <input
-                type="number"
+                type="text"
                 name="stock"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={productData.stock}
                 onChange={handleProductChange}
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-[#59AB9B] focus:border-[#59AB9B]"
@@ -383,7 +444,7 @@ export default function ProductsPage() {
                   type="file"
                   accept="image/*"
                   onChange={handleImageUpload}
-                  className="w-full p-2 border border-gray-300 rounded-md text-sm text-gray-500
+                  className="w-1/2 p-2 rounded-md text-sm text-gray-500
                     file:mr-4 file:py-2 file:px-4
                     file:rounded-full file:border-0
                     file:text-sm file:font-semibold
@@ -405,7 +466,7 @@ export default function ProductsPage() {
                   type="file"
                   accept="image/*"
                   onChange={handleGalleryUpload}
-                   className="w-full p-2 border border-gray-300 rounded-md text-sm text-gray-500
+                   className="w-1/2 p-2 rounded-md text-sm text-gray-500
                     file:mr-4 file:py-2 file:px-4
                     file:rounded-full file:border-0
                     file:text-sm file:font-semibold
@@ -437,18 +498,21 @@ export default function ProductsPage() {
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Descripción Principal</label>
               <textarea
-                name="descripcionPrincipal"
+                name="descripcionPrincipal"    
+                placeholder="Descripción que aparecerá en la parte superior de la página del producto, debajo del nombre y precio."            
                 value={productData.descripcionPrincipal}
                 onChange={handleProductChange}
                 rows={3}
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-[#59AB9B] focus:border-[#59AB9B]"
+                required
               />
             </div>
             
              <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Descripción Corta</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Descripción Corta (Opcional)</label>
               <textarea
                 name="descripcionCorta"
+                placeholder="Descripción que aparecerá debajo del precio en la página del producto, sirve para resaltar el por que de la variación de precios"
                 value={productData.descripcionCorta}
                 onChange={handleProductChange}
                 rows={2}
@@ -461,6 +525,7 @@ export default function ProductsPage() {
               <textarea
                 name="descripcionLarga"
                 value={productData.descripcionLarga}
+                placeholder="Descripción detallada que aparecerá en la pestaña de descripción en la página del producto."
                 onChange={handleProductChange}
                 rows={4}
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-[#59AB9B] focus:border-[#59AB9B]"
@@ -486,20 +551,33 @@ export default function ProductsPage() {
                 <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">Precio</label>
                     <input 
-                        type="number" 
-                        placeholder="0"
-                        value={newOption.precio}
-                        onChange={(e) => setNewOption({...newOption, precio: Number(e.target.value)})}
+                        type="text"
+                        placeholder="Ej: 100.000"
+                        inputMode="numeric"
+                        pattern="[0-9.]*"
+                        value={newOptionPrecioInput}
+                        onChange={(e) => {
+                          const digitsOnly = e.target.value.replace(/\D/g, '');
+                          const numericValue = digitsOnly ? Number(digitsOnly) : 0;
+                          setNewOptionPrecioInput(digitsOnly ? formatThousands(numericValue) : '');
+                          setNewOption({ ...newOption, precio: numericValue });
+                        }}
                         className="p-2 border border-gray-300 rounded-md text-sm w-32"
                     />
                 </div>
                 <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">Stock</label>
                     <input 
-                        type="number" 
+                        type="text" 
                         placeholder="0"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={newOption.stock}
-                        onChange={(e) => setNewOption({...newOption, stock: Number(e.target.value)})}
+                        onChange={(e) => {
+                          const digitsOnly = e.target.value.replace(/\D/g, '');
+                          const numericValue = digitsOnly ? Number(digitsOnly) : 0;
+                          setNewOption({ ...newOption, stock: numericValue });
+                        }}
                         className="p-2 border border-gray-300 rounded-md text-sm w-24"
                     />
                 </div>
@@ -527,7 +605,7 @@ export default function ProductsPage() {
                             {options.map((opt, idx) => (
                                 <tr key={idx}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{opt.nombre}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${opt.precio}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatThousands(opt.precio)}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{opt.stock}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                         <button 
@@ -557,7 +635,16 @@ export default function ProductsPage() {
 
       {/* Lista de Productos */}
       <section className="bg-white rounded-lg shadow-md border border-gray-100 overflow-hidden">
-        <h2 className="text-xl font-bold p-6 border-b border-gray-200 text-gray-800">Inventario Actual</h2>
+        <div className="p-6 border-b border-gray-200 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <h2 className="text-xl font-bold text-gray-800">Inventario Actual</h2>
+          <input
+            type="text"
+            placeholder="Buscar por nombre del producto..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full md:w-80 p-2 border border-gray-300 rounded-md focus:ring-[#59AB9B] focus:border-[#59AB9B]"
+          />
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -570,7 +657,7 @@ export default function ProductsPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {products.map((product) => (
+              {paginatedProducts.map((product) => (
                 <tr key={product.id}>
                   <td className="px-6 py-4 whitespace-nowrap">
                      {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -578,7 +665,7 @@ export default function ProductsPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{product.nombre}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-gray-500">
-                    ${product.precioBase} 
+                    ${formatThousands(Number(product.precioBase))}
                     {product.options && product.options.length > 0 && <span className="text-xs text-blue-500 ml-1">({product.options.length} vars)</span>}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-gray-500">{product.stock}</td>
@@ -594,8 +681,42 @@ export default function ProductsPage() {
                   </td>
                 </tr>
               ))}
+              {paginatedProducts.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
+                    No hay productos para mostrar.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
+        </div>
+
+        <div className="flex flex-col md:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+          <p className="text-sm text-gray-600">
+            Mostrando {paginatedProducts.length} de {filteredProducts.length} productos
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1.5 rounded-md border border-gray-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Anterior
+            </button>
+            <span className="text-sm text-gray-700">
+              Página {currentPage} de {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1.5 rounded-md border border-gray-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Siguiente
+            </button>
+          </div>
         </div>
       </section>
     </div>
